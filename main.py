@@ -10,32 +10,24 @@ def main():
         sys.exit(1)
 
     try:
-        # 初始化客戶端
         client = genai.Client(api_key=api_key)
         
-        # 嘗試使用最基礎的模型名稱（不帶前綴）
-        model_id = 'gemini-1.5-flash' 
+        # 根據你的列表，我們切換到 2.0 版本，這是 2026 年的主流穩定版
+        model_id = 'gemini-2.0-flash' 
         
         print(f"🤖 正在嘗試向模型 {model_id} 發送請求...")
         
         response = client.models.generate_content(
             model=model_id, 
-            contents="請說：環境配置成功，開始追蹤主要基金！"
+            contents="請說：2.0 Flash 模型連接成功！Smart Money Tracker 準備就緒。"
         )
         
-        print("\n" + "="*20)
+        print("\n" + "="*30)
         print(f"🌟 AI 回覆：{response.text}")
-        print("="*20 + "\n")
+        print("="*30 + "\n")
         
     except Exception as e:
         print(f"❌ 執行出錯：{str(e)}")
-        print("\n正在為您查詢目前可用的模型列表...")
-        try:
-            # 如果失敗，列出所有可用模型供參考
-            for m in client.models.list():
-                print(f"可用模型: {m.name}")
-        except:
-            pass
         sys.exit(1)
 
 if __name__ == "__main__":
