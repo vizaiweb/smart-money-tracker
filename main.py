@@ -1,23 +1,25 @@
 import os
-import google.generativeai as genai
 import sys
+from google import genai
 
 def main():
     api_key = os.getenv("GEMINI_API_KEY")
     
-    # 檢查 1: Secret 有沒有讀到
     if not api_key:
-        print("❌ 錯誤：找不到 GEMINI_API_KEY，請檢查 GitHub Secrets 設定。")
+        print("❌ 錯誤：找不到 GEMINI_API_KEY")
         sys.exit(1)
-    
-    print(f"✅ 成功讀取 API Key (前四位: {api_key[:4]}...)")
 
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # 使用 2026 年最新的 Google GenAI 客戶端
+        client = genai.Client(api_key=api_key)
         
-        print("🤖 正在測試 AI 回應...")
-        response = model.generate_content("你好，請說：測試成功")
+        print("🤖 正在向 Gemini 發送請求...")
+        # 注意：2026 年模型名稱簡化為 'gemini-2.0-flash' 或 'gemini-1.5-flash'
+        response = client.models.generate_content(
+            model='gemini-1.5-flash', 
+            contents="請說：測試成功，準備好追蹤聰明錢了！"
+        )
+        
         print(f"🌟 AI 回覆：{response.text}")
         
     except Exception as e:
