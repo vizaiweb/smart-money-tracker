@@ -1,7 +1,6 @@
-# smart-money-tracker
-🚀 An AI-powered investment intelligence dashboard that tracks top fund managers, legendary investors, and SEC 13F filings in real-time. Built with Next.js, Python, and Gemini AI.
-
 # 📈 Smart-Money-Tracker 2026
+
+🚀 An AI-powered investment intelligence dashboard that tracks top fund managers, legendary investors, and SEC 13F filings in real-time. Built with Next.js, Python, and Gemini AI.
 
 **Smart-Money-Tracker** 是一個自動化的投資情報監測工具。它旨在幫助投資者從雜亂的社交媒體和繁瑣的監管文件中，提取出最有價值的「聰明錢 (Smart Money)」動向。
 
@@ -23,8 +22,3 @@
 1. **每小時一次**: 執行 Python 腳本抓取新消息。
 2. **AI 處理**: 將獲取的文本傳送至 Gemini 進行摘要分析。
 3. **數據更新**: 將結果推送至數據庫並觸發前端網頁更新。
-
-## 🚦 快速開始
-1. **Clone 倉庫**
-   ```bash
-   git clone [https://github.com/你的用戶名/smart-money-tracker.git](https://github.com/你的用戶名/smart-money-tracker.git)
