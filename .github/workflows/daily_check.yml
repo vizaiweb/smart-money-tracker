@@ -1,22 +1,21 @@
 name: Daily Investment Summary
 
-# 什麼時候觸發？
 on:
   schedule:
-    - cron: '0 0 * * *'  # 每天午夜 (UTC) 自動執行
-  workflow_dispatch:      # 讓你可以手動點擊按鈕執行
+    - cron: '0 0 * * *'
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4  # 升級到 v4 解決警告
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5 # 升級到 v5 解決警告
         with:
-          python-version: '3.9'
+          python-version: '3.10'
 
       - name: Install dependencies
         run: pip install google-generativeai
@@ -24,4 +23,6 @@ jobs:
       - name: Run Script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python main.py
+        run: |
+          ls -R # 這行會印出檔案清單，幫我們除錯
+          python main.py
