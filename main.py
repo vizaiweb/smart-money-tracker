@@ -5,24 +5,33 @@ import xml.etree.ElementTree as ET
 from google import genai
 
 def fetch_finance_news():
-    """抓取路透社財經新聞 RSS (範例源)"""
-    print("📡 正在從國際新聞源抓取數據...")
-    url = "https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best"
+    """更換為 CNBC 的 RSS 源，並加強偽裝"""
+    print("📡 正在抓取 CNBC 即時財經數據...")
+    # 更換為 CNBC 商業新聞源
+    url = "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147"
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        # 加強 Header 偽裝，讓它看起來更像真實瀏覽器
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/xml,application/xml,application/xhtml+xml'
+        }
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             xml_data = response.read()
         
         root = ET.fromstring(xml_data)
         news_items = []
-        for item in root.findall('.//item')[:10]: # 抓取前 10 則新聞
+        # 尋找 RSS 中的新聞標題
+        for item in root.findall('.//item')[:12]: 
             title = item.find('title').text
-            news_items.append(title)
-        return "\n".join(f"- {t}" for t in news_items)
+            description = item.find('description').text if item.find('description') is not None else ""
+            news_items.append(f"【標題】{title}\n【摘要】{description}")
+            
+        print(f"✅ 成功獲取 {len(news_items)} 則最新消息")
+        return "\n\n".join(news_items)
     except Exception as e:
-        print(f"⚠️ 抓取新聞失敗: {e}")
-        return "無法獲取即時新聞資料。"
+        print(f"⚠️ 抓取失敗: {e}")
+        return "無法獲取即時新聞資料，請檢查網絡或源網址。"
 
 def main():
     api_key = os.getenv("GEMINI_API_KEY")
