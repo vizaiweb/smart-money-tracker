@@ -7,7 +7,7 @@ import urllib.parse
 from google import genai
 
 def fetch_rss_data(source_name, url):
-    """抓取 RSS 數據，增加更強的錯誤處理與 User-Agent"""
+    """抓取 RSS 數據"""
     print(f"📡 正在抓取 {source_name}...")
     try:
         headers = {
@@ -17,7 +17,6 @@ def fetch_rss_data(source_name, url):
         with urllib.request.urlopen(req, timeout=15) as response:
             xml_data = response.read()
         root = ET.fromstring(xml_data)
-        # 獲取前 6 則新聞
         items = [f"[{source_name}] {item.find('title').text}" for item in root.findall('.//item')[:6]]
         return "\n".join(items)
     except Exception as e:
@@ -25,7 +24,7 @@ def fetch_rss_data(source_name, url):
         return f"[{source_name}] (暫時無法獲取更新)"
 
 def send_telegram_msg(text):
-    """發送到 Telegram (使用卡片分隔符號優化排版)"""
+    """發送到 Telegram"""
     token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     
@@ -33,9 +32,8 @@ def send_telegram_msg(text):
         print("⚠️ 找不到 Telegram 設定。")
         return
 
-    # 簡單清洗：移除可能干擾解析的符號，確保傳輸穩定
+    # 清洗文本，確保傳輸穩定
     clean_text = text.replace("**", "")
-    
     if len(clean_text) > 4000: clean_text = clean_text[:4000] + "..."
     
     params = urllib.parse.urlencode({"chat_id": chat_id, "text": clean_text})
@@ -50,6 +48,7 @@ def send_telegram_msg(text):
         print(f"❌ 推送失敗: {e}")
 
 def main():
+    # 讀取 API Key
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         print("❌ 找不到 GEMINI_API_KEY")
@@ -58,11 +57,9 @@ def main():
     # 初始化 Client
     client = genai.Client(api_key=api_key)
 
-    # 1. 直接指定最穩定的免費版模型，避開 2.0 的嚴格限流
-    target_model = "gemini-1.5-flash" 
-    print(f"🚀 強制使用穩定版模型: {target_model}")
-    except Exception as e:
-        print(f"⚠️ 模型列表獲取受限，使用預設值: {target_model}")
+    # 1. 指定最穩定的模型 (避開 2.0 的 429 限制)
+    target_model = "gemini-1.5-flash"
+    print(f"🚀 使用穩定版模型: {target_model}")
 
     # 2. 抓取多源財經數據
     fed_news = fetch_rss_data("Fed 官網", "https://www.federalreserve.gov/feeds/press_all.xml")
@@ -77,17 +74,17 @@ def main():
     數據源：
     {combined_news}
     
-    請嚴格遵守以下卡片排版規範（禁止使用 Markdown 表格）：
+    請嚴格遵守以下卡片排版規範（禁止使用表格）：
     
     🚨 【重磅警報：總經與 Fed 動態】
-    (若有 Fed 消息，請置頂分析對『美債殖利率』與『科技股估值』的影響。若無則寫「今日總經面平穩」。)
+    (若有 Fed 消息，請置頂分析對市場影響。若無則寫「今日總經面平穩」。)
     
     ✨ 【今日實戰標的對照】
     列出 3-5 個標的，格式如下：
     ━━━━━━━━━━━━━━━━
     💰 股票代號 Ticker
     ├─ 🚦 影響：🟢 看多 / 🔴 看空 / 🟡 觀望
-    ├─ 📢 事實：(一句話新聞核心)
+    ├─ 📢 事實：(一句話核心)
     └─ 💡 理由：(白話投資邏輯)
     ━━━━━━━━━━━━━━━━
     
@@ -104,10 +101,10 @@ def main():
     請用繁體中文，語氣精鍊專業。
     """
 
-    # 4. 執行生成與推送 (含 429 配額自動重試)
+    # 4. 執行生成與推送 (含重試機制)
     for i in range(3):
         try:
-            print(f"🤖 AI 首席分析師正在閱覽報告 (第 {i+1} 次)...")
+            print(f"🤖 AI 分析中 (第 {i+1} 次)...")
             response = client.models.generate_content(model=target_model, contents=prompt)
             report = response.text
             
@@ -117,14 +114,11 @@ def main():
             break 
         except Exception as e:
             if "429" in str(e):
-                print("⏳ 觸發頻率限制，等待 60 秒後嘗試最後一次...")
+                print(f"⏳ 頻率限制，等待 60 秒 (重試 {i+1}/3)...")
                 time.sleep(60)
-            elif i < 2:
-                print(f"⚠️ 嘗試失敗 ({e})，30秒後重試...")
-                time.sleep(30)
             else:
-                print(f"❌ 最終執行失敗: {e}")
-                sys.exit(1)
+                print(f"⚠️ 嘗試失敗: {e}")
+                time.sleep(10)
 
 if __name__ == "__main__":
     main()
