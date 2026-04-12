@@ -101,7 +101,8 @@ def main():
     for i in range(3):
         try:
             print(f"🤖 AI 首席分析師正在閱覽報告 (第 {i+1} 次)...")
-            response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
+            # 換回 1.5-flash，這是目前免費版最穩定的型號
+            response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
             report = response.text
             
             print("--- 報告預覽 ---")
@@ -109,7 +110,10 @@ def main():
             send_telegram_msg(report)
             break 
         except Exception as e:
-            if "503" in str(e) and i < 2:
+            if "429" in str(e):
+                print("⏳ 觸發頻率限制，強制等待 60 秒後重試...")
+                time.sleep(60)  # 遇到 429 錯誤時，多等一下讓配額恢復
+            elif "503" in str(e) and i < 2:
                 print("⏳ 伺服器忙碌，30秒後重試...")
                 time.sleep(30)
             else:
