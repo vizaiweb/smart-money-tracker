@@ -2,7 +2,7 @@ name: Daily Investment Summary
 
 on:
   schedule:
-    - cron: '30 13 * * 1-5'  # 週一至週五, UTC 13:30 (台灣時間 21:30, 美股開盤)
+    - cron: '26 13 * * 1-5'  # 週一至週五, UTC 13:26 (台灣時間 21:26, 美股開盤)
   workflow_dispatch:          # 保留手動觸發功能
 
 jobs:
