@@ -21,7 +21,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install yfinance google-generativeai
+          # 這裡必須改成 google-genai，才能匹配你的 from google import genai
+          pip install yfinance google-genai
 
       - name: Run Script
         env:
