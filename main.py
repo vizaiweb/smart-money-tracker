@@ -32,7 +32,6 @@ def send_telegram_msg(text):
         print("⚠️ 找不到 Telegram 設定。")
         return
 
-    # 清洗文本，確保傳輸穩定
     clean_text = text.replace("**", "")
     if len(clean_text) > 4000: clean_text = clean_text[:4000] + "..."
     
@@ -48,77 +47,33 @@ def send_telegram_msg(text):
         print(f"❌ 推送失敗: {e}")
 
 def main():
-    # 讀取 API Key
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        print("❌ 找不到 GEMINI_API_KEY")
         sys.exit(1)
 
-    # 初始化 Client
     client = genai.Client(api_key=api_key)
 
-    # 1. 指定最穩定的模型 (避開 2.0 的 429 限制)
-    target_model = "gemini-1.5-flash"
-    print(f"🚀 使用穩定版模型: {target_model}")
-
-    # 2. 抓取多源財經數據
+    # 1. 抓取多源財經數據
     fed_news = fetch_rss_data("Fed 官網", "https://www.federalreserve.gov/feeds/press_all.xml")
     cnbc_news = fetch_rss_data("CNBC 財經", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147")
     market_news = fetch_rss_data("Yahoo 市場", "https://finance.yahoo.com/news/rssindex")
-    
     combined_news = f"{fed_news}\n{cnbc_news}\n{market_news}"
 
-    # 3. 定製卡片式分析 Prompt
-    prompt = f"""
-    你現在是華爾街頂尖首席投資官 (CIO)。請從以下數據中提取最具影響力的市場動態。
-    數據源：
-    {combined_news}
-    
-    請嚴格遵守以下卡片排版規範（禁止使用表格）：
-    
-    🚨 【重磅警報：總經與 Fed 動態】
-    (若有 Fed 消息，請置頂分析對市場影響。若無則寫「今日總經面平穩」。)
-    
-    ✨ 【今日實戰標的對照】
-    列出 3-5 個標的，格式如下：
-    ━━━━━━━━━━━━━━━━
-    💰 股票代號 Ticker
-    ├─ 🚦 影響：🟢 看多 / 🔴 看空 / 🟡 觀望
-    ├─ 📢 事實：(一句話核心)
-    └─ 💡 理由：(白話投資邏輯)
-    ━━━━━━━━━━━━━━━━
-    
-    🧠 【深度解析：產業趨勢】
-    📌 觀察點名稱
-    • 📝 事實紀錄：...
-    • 🧪 產業聯想：...
-    • ⚖️ 邏輯推演：...
-    
-    🏁 【最終操作指南】
-    • 🎯 建議行動：...
-    • 👁️ 核心觀察名單：...
-    
-    請用繁體中文，語氣精鍊專業。
-    """
+    # 2. 定製分析 Prompt
+    prompt = f"請針對以下財經數據進行專業投資分析，使用繁體中文和卡片式排版：{combined_news}"
 
-    # 4. 執行生成與推送 (含重試機制)
+    # 3. 執行生成 (使用絕對模型路徑)
     for i in range(3):
         try:
-            print(f"🤖 AI 分析中 (第 {i+1} 次)...")
-            response = client.models.generate_content(model=target_model, contents=prompt)
+            print(f"🤖 AI 分析中 (使用 models/gemini-1.5-flash)...")
+            # 關鍵修正點：加上 models/ 前綴
+            response = client.models.generate_content(model='models/gemini-1.5-flash', contents=prompt)
             report = response.text
-            
-            print("--- 報告預覽 ---")
-            print(report)
             send_telegram_msg(report)
             break 
         except Exception as e:
-            if "429" in str(e):
-                print(f"⏳ 頻率限制，等待 60 秒 (重試 {i+1}/3)...")
-                time.sleep(60)
-            else:
-                print(f"⚠️ 嘗試失敗: {e}")
-                time.sleep(10)
+            print(f"⚠️ 嘗試 {i+1} 失敗: {e}")
+            time.sleep(20)
 
 if __name__ == "__main__":
     main()
