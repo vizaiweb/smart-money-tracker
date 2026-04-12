@@ -58,19 +58,9 @@ def main():
     # 初始化 Client
     client = genai.Client(api_key=api_key)
 
-    # 1. 🔍 自動偵測可用模型名稱 (防 404)
-    available_models = []
-    target_model = "gemini-1.5-flash" # 預設 fallback
-    try:
-        for m in client.models.list():
-            available_models.append(m.name)
-        
-        # 優先順序：2.0-flash > 1.5-flash > 1.5-flash-8b
-        for candidate in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"]:
-            if any(candidate in name for name in available_models):
-                target_model = candidate
-                break
-        print(f"✅ 已自動選擇最優模型: {target_model}")
+    # 1. 直接指定最穩定的免費版模型，避開 2.0 的嚴格限流
+    target_model = "gemini-1.5-flash" 
+    print(f"🚀 強制使用穩定版模型: {target_model}")
     except Exception as e:
         print(f"⚠️ 模型列表獲取受限，使用預設值: {target_model}")
 
