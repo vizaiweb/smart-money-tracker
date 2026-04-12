@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 import urllib.parse
 import yfinance as yf
-from google import genai
+import google.generativeai as genai
 
 def fetch_rss_data(source_name, url):
     """抓取 RSS 數據"""
