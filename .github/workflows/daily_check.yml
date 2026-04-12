@@ -27,6 +27,7 @@ jobs:
       - name: Run Script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          ls -R # 這行會印出檔案清單，幫我們除錯
-          python main.py
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+        run: python main.py
