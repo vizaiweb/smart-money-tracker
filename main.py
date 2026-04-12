@@ -22,21 +22,25 @@ def fetch_rss_data(source_name, url):
         return ""
 
 def send_telegram_msg(text):
-    """將報告發送到 Telegram"""
+    """將報告發送到 Telegram (改用 HTML 模式更穩定)"""
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     if not token or not chat_id:
-        print("⚠️ 找不到 Telegram 設定，僅在日誌輸出。")
+        print("⚠️ 找不到 Telegram 設定。")
         return
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    # Telegram 有訊息長度限制 (4096字)，若報告太長會切斷
-    if len(text) > 4000: text = text[:4000] + "..."
+    
+    # 簡單的清理：將 Markdown 的 ** 換成 HTML 的 <b>，避免 400 錯誤
+    safe_text = text.replace("**", "<b>").replace("**", "</b>")
+    
+    # 限制長度
+    if len(safe_text) > 4000: safe_text = safe_text[:4000] + "..."
     
     payload = {
         "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "Markdown"
+        "text": safe_text,
+        "parse_mode": "HTML" # 改用 HTML 模式，容錯率更高
     }
     
     try:
@@ -46,7 +50,13 @@ def send_telegram_msg(text):
             if response.getcode() == 200:
                 print("📲 報告已成功推送到 Telegram！")
     except Exception as e:
-        print(f"❌ Telegram 推送失敗: {e}")
+        # 如果 HTML 也失敗，最後一招：用純文字發送，保證一定收得到
+        print(f"⚠️ HTML 推送失敗，嘗試純文字模式... ({e})")
+        payload["parse_mode"] = ""
+        data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(req) as response:
+             print("📲 報告已透過純文字模式送達！")
 
 def main():
     api_key = os.getenv("GEMINI_API_KEY")
