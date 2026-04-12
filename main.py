@@ -22,41 +22,36 @@ def fetch_rss_data(source_name, url):
         return ""
 
 def send_telegram_msg(text):
-    """將報告發送到 Telegram (改用 HTML 模式更穩定)"""
+    """將報告發送到 Telegram (使用最強韌的 GET 請求方式)"""
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    
     if not token or not chat_id:
         print("⚠️ 找不到 Telegram 設定。")
         return
 
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    # 1. 清洗數據：移除 HTML 標籤與 Markdown 符號，確保純文字傳輸
+    clean_text = text.replace("<b>", "").replace("</b>", "").replace("**", "")
     
-    # 簡單的清理：將 Markdown 的 ** 換成 HTML 的 <b>，避免 400 錯誤
-    safe_text = text.replace("**", "<b>").replace("**", "</b>")
+    # 2. 限制字數並進行 URL 編碼
+    if len(clean_text) > 4000: clean_text = clean_text[:4000] + "..."
     
-    # 限制長度
-    if len(safe_text) > 4000: safe_text = safe_text[:4000] + "..."
+    # 3. 使用 URL 參數方式 (GET)，這是最穩定、最不會報 400 的方法
+    import urllib.parse
+    params = urllib.parse.urlencode({
+        "chat_id": str(chat_id).strip(),
+        "text": clean_text
+    })
     
-    payload = {
-        "chat_id": chat_id,
-        "text": safe_text,
-        "parse_mode": "HTML" # 改用 HTML 模式，容錯率更高
-    }
+    url = f"https://api.telegram.org/bot{token}/sendMessage?{params}"
     
     try:
-        data = json.dumps(payload).encode('utf-8')
-        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
-        with urllib.request.urlopen(req) as response:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=15) as response:
             if response.getcode() == 200:
                 print("📲 報告已成功推送到 Telegram！")
     except Exception as e:
-        # 如果 HTML 也失敗，最後一招：用純文字發送，保證一定收得到
-        print(f"⚠️ HTML 推送失敗，嘗試純文字模式... ({e})")
-        payload["parse_mode"] = ""
-        data = json.dumps(payload).encode('utf-8')
-        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
-        with urllib.request.urlopen(req) as response:
-             print("📲 報告已透過純文字模式送達！")
+        print(f"❌ 終極推送失敗，請檢查 Token 與 Chat ID 是否正確。錯誤資訊: {e}")
 
 def main():
     api_key = os.getenv("GEMINI_API_KEY")
