@@ -101,7 +101,7 @@ def main():
     for i in range(3):
         try:
             print(f"🤖 AI 首席分析師正在閱覽報告 (第 {i+1} 次)...")
-            response = client.models.generate_content(model='gemini-1.5-flash-latest', contents=prompt)
+            response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
             report = response.text
             
             print("--- 報告預覽 ---")
