@@ -6,6 +6,9 @@ import time
 import urllib.parse
 from google import genai
 
+for m in client.models.list():
+    print(f"可用模型: {m.name}")
+
 def fetch_rss_data(source_name, url):
     """抓取 RSS 數據，增加更強的錯誤處理"""
     print(f"📡 正在抓取 {source_name}...")
@@ -102,7 +105,7 @@ def main():
         try:
             print(f"🤖 AI 首席分析師正在閱覽報告 (第 {i+1} 次)...")
             # 換回 1.5-flash，這是目前免費版最穩定的型號
-            response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
+            response = client.models.generate_content(model='models/gemini-1.5-flash', contents=prompt)
             report = response.text
             
             print("--- 報告預覽 ---")
