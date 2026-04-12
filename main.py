@@ -26,6 +26,7 @@ def send_telegram_msg(text):
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     if not token or not chat_id: return
     
+    # 移除 ** 避免格式跑掉
     clean_text = text.replace("**", "")
     if len(clean_text) > 4000: clean_text = clean_text[:4000] + "..."
     
@@ -53,7 +54,38 @@ def main():
     for i in range(3):
         try:
             print(f"🤖 AI 使用 {target_model} 分析中 (第 {i+1} 次)...")
-            prompt = f"你現在是首席分析師，請針對以下數據提供繁體中文卡片式報告，包含🚨重磅警報、✨實戰標的、🧠深度解析。標的請用粗體和分隔線。數據：\n{combined_news}"
+            # 這裡使用的是你剛才優化的精美 Prompt
+            prompt = f"""
+你現在是華爾街頂尖首席投資官 (CIO)。請從以下數據中提取最具影響力的市場動態。
+數據源：
+{combined_news}
+
+請嚴格遵守以下卡片排版規範（禁止使用 Markdown 表格）：
+
+🚨 【重磅警報：總經與 Fed 動態】
+(若有 Fed 消息，請置頂分析對市場影響。若無則寫「今日總經面平穩」。)
+
+✨ 【今日實戰標的對照】
+列出 3-5 個標的，格式如下：
+━━━━━━━━━━━━━━━━
+💰 股票代號 Ticker
+├─ 🚦 影響：🟢 看多 / 🔴 看空 / 🟡 觀望
+├─ 📢 事實：(一句話核心)
+└─ 💡 理由：(白話投資邏輯)
+━━━━━━━━━━━━━━━━
+
+🧠 【深度解析：產業趨勢】
+📌 觀察點名稱
+• 📝 事實紀錄：...
+• 🧪 產業聯想：...
+• ⚖️ 邏輯推演：...
+
+🏁 【最終操作指南】
+• 🎯 建議行動：...
+• 👁️ 核心觀察名單：...
+
+請用繁體中文，語氣精鍊專業，善用粗體字標記關鍵字。
+"""
             
             response = client.models.generate_content(model=target_model, contents=prompt)
             
