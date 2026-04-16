@@ -2,8 +2,13 @@ name: Daily Investment Summary
 
 on:
   schedule:
-    - cron: '0 * * * 1-5'  # 每個整點執行一次
-  workflow_dispatch:          # 保留手動觸發功能
+    # 執行時間已全部轉換為澳門時間 (CST)
+    - cron: '0 1 * * 1-5'   # 澳門 09:00 (早報：科研論文 arXiv)
+    - cron: '0 6 * * 1-5'   # 澳門 14:00 (午報：亞太熱點)
+    - cron: '0 12 * * 1-5'  # 澳門 20:00 (美股盤前：熱點預警)
+    - cron: '0 14 * * 1-5'  # 澳門 22:00 (美股觀察：開盤前夕/初段) - 已修改
+    - cron: '0 22 * * 1-5'  # 澳門 06:00 (收盤戰報：盤後總結)
+  workflow_dispatch:        # 保留手動觸發功能
 
 jobs:
   build:
