@@ -4,7 +4,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 import time
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import urllib.parse
 import yfinance as yf
 from google.genai import Client
