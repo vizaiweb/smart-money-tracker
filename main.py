@@ -54,7 +54,9 @@ def main():
     if not api_key: sys.exit(1)
     client = Client(api_key=api_key)
 
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # --- 修改：設定澳門時間 (UTC+8) ---
+    tz_macau = timezone(timedelta(hours=8))
+    current_time = datetime.now(tz_macau).strftime("%Y-%m-%d %H:%M:%S")
     
     # 1. 切換為硬核來源：arXiv (AI/科技論文) + Hacker News (矽谷熱點) + CNBC
     tech_news = fetch_rss_data("arXiv", "https://rss.arxiv.org/rss/cs.AI")
