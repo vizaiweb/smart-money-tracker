@@ -1,4 +1,4 @@
-Import os
+import os
 import sys
 import urllib.request
 import xml.etree.ElementTree as ET
