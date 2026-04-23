@@ -2,18 +2,19 @@ name: 亞微秒高頻交易戰報系統
 
 on:
   schedule:
-    # 執行時間 (UTC)，轉換為澳門時間 (+8 小時)
     - cron: '0 1 * * 1-5'    # 09:00 早報
     - cron: '0 6 * * 1-5'    # 14:00 午報
     - cron: '0 12 * * 1-5'   # 20:00 盤前預警
-    # --- 衝刺時段 ---
     - cron: '00 13 * * 1-5'  # 21:00 (T-30)
     - cron: '25 13 * * 1-5'  # 21:25 (T-5)
-    - cron: '30 13 * * 1-5'  # 21:30 (T+0 開盤)
-    - cron: '33 13 * * 1-5'  # 21:33 (T+3 驗證)
-    # ----------------
+    - cron: '30 13 * * 1-5'  # 21:30 (T+0)
+    - cron: '33 13 * * 1-5'  # 21:33 (T+3)
     - cron: '0 22 * * 1-5'   # 06:00 收盤
   workflow_dispatch: 
+
+# 新增：強制開啟 Node.js 24 支援環境
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-and-deploy:
@@ -30,17 +31,16 @@ jobs:
           python-version: '3.10'
 
       - name: 安裝依賴
-        run: |
-          pip install yfinance google-genai
+        run: pip install -r requirements.txt
 
-      - name: 執行分析
+      - name: 執行亞微秒分析引擎 (賺錢模式)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python main.py
 
-      - name: 部署數據至 gh-pages-dev
+      - name: 部署戰報至 gh-pages-dev 分支
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           branch: gh-pages-dev
