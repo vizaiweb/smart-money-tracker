@@ -10,16 +10,21 @@ import urllib.parse
 import yfinance as yf
 from google.genai import Client
 
-def get_market_phase(now):
-    hm = now.strftime("%H:%M")
-    phases = {
-        "22:30": ("🚨 手動實戰演練", "測試即時交易指令格式輸出。"), # 暫時加這一行測試
-        "21:00": ("🚨 T-30 策略部署", "關注 arXiv 科研源頭與總經背景。"),
-        "21:25": ("🎯 T-5 狙擊模式", "監控盤前跳空 (Gap) 與極端情緒。"),
-        "21:30": ("⚡ T+0 子彈時間", "分析瞬時成交量，判斷算法觸發點。"),
-        "21:33": ("🏁 T+3 收穫驗證", "區分真假突破，驗證邏輯鏈真實性。")
-    }
-    return phases.get(hm, ("🔍 例行市場掃描", "掃描產業趨勢與技術進展。"))
+def get_market_phase(now, is_manual=False):
+    """判定階段：手動觸發優先進入實戰模式"""
+    if is_manual:
+        return ("🎯 手動實戰演習", "啟動最高規格即時交易指令格式。")
+    
+    # 轉成分鐘數進行區間判定 (增加容錯)
+    mm = now.hour * 60 + now.minute
+    
+    # 夏令時間判定 (澳門 21:00 = 1260分鐘)
+    if 1260 <= mm < 1285:   return ("🚨 T-30 策略部署", "關注 arXiv 科研源頭與總經背景。")
+    elif 1285 <= mm < 1290: return ("🎯 T-5 狙擊模式", "監控盤前跳空 (Gap) 與極端情緒。")
+    elif 1290 <= mm <= 1292: return ("⚡ T+0 子彈時間", "分析瞬時量能，判斷算法觸發點。")
+    elif 1293 <= mm < 1310: return ("🏁 T+3 收穫驗證", "區分真假突破，驗證邏輯鏈。")
+    else:
+        return ("🔍 例行市場掃描", "掃描產業趨勢與技術進展。")
 
 def fetch_rss(url):
     try:
@@ -45,24 +50,30 @@ def main():
     if not api_key: sys.exit(1)
     client = Client(api_key=api_key)
 
+    # 1. 時間與觸發模式判定
     tz_macau = timezone(timedelta(hours=8))
     now = datetime.now(tz_macau)
-    phase_name, phase_desc = get_market_phase(now)
+    current_time_str = now.strftime("%Y-%m-%d %H:%M:%S")
     
+    # 偵測是否為手動執行
+    is_manual = os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
+    phase_name, phase_desc = get_market_phase(now, is_manual)
+    
+    # 2. 抓取數據
     arxiv = fetch_rss("https://rss.arxiv.org/rss/cs.AI")
     hacker_news = fetch_rss("https://news.ycombinator.com/rss")
     market_news = fetch_rss("https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147")
     all_titles = "\n".join(arxiv + hacker_news + market_news)
 
-    # 關鍵時段跳過 Hash 去重
+    # 3. 去重機制 (手動執行或實戰時段跳過)
     current_hash = hashlib.md5(all_titles.encode('utf-8')).hexdigest()
     hash_file = "last_news_hash.txt"
-    if phase_name == "🔍 例行市場掃描" and os.path.exists(hash_file):
+    if not is_manual and "例行" in phase_name and os.path.exists(hash_file):
         with open(hash_file, "r") as f:
             if f.read() == current_hash: return
     with open(hash_file, "w") as f: f.write(current_hash)
 
-    # 股價與分析
+    # 4. 股價獲取
     tickers = ["NVDA", "TSLA", "PLTR", "QBTS", "IONQ"]
     market_data = ""
     stock_dict = {}
@@ -74,17 +85,17 @@ def main():
             stock_dict[t] = price
         except: continue
 
-   if phase_name == "🔍 例行市場掃描":
-        # 這裡是你原本的例行報告 Prompt
+    # 5. 核心 Prompt 分流 (修正原本代碼的語法錯誤)
+    if "例行" in phase_name:
         prompt = f"""
-        現在是【{phase_name}】。
-        請以首席分析師身份，針對以下數據產出「產業趨勢掃描」報告。
+        現在是【{phase_name}】。任務：{phase_desc}
+        請以首席分析師身份產出「產業趨勢掃描」報告。
         數據：{market_data}
         新聞：{all_titles}
         (格式要求：重磅警報、標對照、深度解析、操作指南)
+        產出時間：{current_time_str} (澳門時間)
         """
     else:
-        # --- 關鍵：這裡才是「交易指令模式」的強效藥 ---
         prompt = f"""
         【重要指令：現在是 {phase_name} 關鍵時段】
         你現在是對沖基金交易主管。請立即產出極具「超短線賺錢指令感」的戰報。
@@ -108,7 +119,7 @@ def main():
         │  🛑 止損：$XXX.XX
         └─ 💡 賺錢邏輯：(為什麼這個點位能賺錢？)
         ━━━━━━━━━━━━━━━━
-        (請針對 3-5 個標的產出上述咭片)
+        (請列出 3-5 個標的)
 
         ⚡ 【亞微秒級推文】
         (充滿金錢感與技術硬核感的短文)
@@ -116,18 +127,23 @@ def main():
         🏁 【最終執行清單】
         (1. 必須鎖定 2. 避開陷阱 3. 預備觸發點)
 
-    ---
-    🔗 來源: arXiv, HN, CNBC | 產出時間：{current_time_str}
-    """
+        ---
+        🔗 來源: arXiv, HN, CNBC | 產出時間：{current_time_str}
+        """
 
+    # 6. 生成與發送
     try:
         response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
         if response.text:
             send_telegram(response.text)
-            # 產出網頁 JSON
             os.makedirs("build", exist_ok=True)
             with open("build/latest_data.json", "w", encoding="utf-8") as f:
-                json.dump({"time": now.strftime("%Y-%m-%d %H:%M:%S"), "phase": phase_name, "report": response.text, "stocks": stock_dict}, f, ensure_ascii=False, indent=2)
+                json.dump({
+                    "time": current_time_str, 
+                    "phase": phase_name, 
+                    "report": response.text, 
+                    "stocks": stock_dict
+                }, f, ensure_ascii=False, indent=2)
     except Exception as e: print(f"Error: {e}")
 
 if __name__ == "__main__":
