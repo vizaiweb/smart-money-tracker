@@ -41,7 +41,12 @@ def send_telegram_msg(text):
     token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     if not token or not chat_id: return
+    
     clean_text = text.replace("**", "")
+    # 如果長度超過 4000 字元，強制截斷並加上結尾
+    if len(clean_text) > 4000:
+        clean_text = clean_text[:3900] + "\n\n...(訊息過長，已截斷)"
+    
     params = urllib.parse.urlencode({"chat_id": chat_id, "text": clean_text})
     url = f"https://api.telegram.org/bot{token}/sendMessage?{params}"
     try:
