@@ -76,3 +76,4 @@ jobs:
             *.log
             last_news_hash.txt
           retention-days: 7
+          
