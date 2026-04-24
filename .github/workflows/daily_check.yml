@@ -2,16 +2,28 @@ name: Daily Investment Summary
 
 on:
   schedule:
-    # 執行時間已全部轉換為澳門時間 (CST)
-    - cron: '0 1 * * 1-5'   # 澳門 09:00 (早報：科研論文 arXiv)
-    - cron: '0 6 * * 1-5'   # 澳門 14:00 (午報：亞太熱點)
-    - cron: '0 12 * * 1-5'  # 澳門 20:00 (美股盤前：熱點預警)
-    - cron: '0 14 * * 1-5'  # 澳門 22:00 (美股觀察：開盤前夕/初段) - 已修改
-    - cron: '0 22 * * 1-5'  # 澳門 06:00 (收盤戰報：盤後總結)
-  workflow_dispatch:        # 保留手動觸發功能
+    # 以下時間皆為 UTC，自動換算為澳門時間 (UTC+8)
+    # 澳門 09:00 (早報：科研論文 arXiv)
+    - cron: '0 1 * * 1-5'
+    
+    # 澳門 14:00 (午報：亞太熱點)
+    - cron: '0 6 * * 1-5'
+    
+    # 澳門 20:00 (美股盤前：熱點預警)
+    - cron: '0 12 * * 1-5'
+    
+    # 澳門 22:00 (美股觀察：開盤前夕)
+    - cron: '0 14 * * 1-5'
+    
+    # 澳門 06:00 (收盤戰報：盤後總結 - 隔日早上)
+    - cron: '0 22 * * 1-5'
+    
+  # 保留手動觸發功能
+  workflow_dispatch:
 
 jobs:
   build:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     
     steps:
@@ -23,11 +35,29 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # 這裡必須改成 google-genai，才能匹配你的 from google import genai
-          pip install yfinance google-genai
+          
+          # 如果有 requirements.txt 就用它安裝
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            # 否則直接安裝套件
+            pip install yfinance google-genai
+          fi
+          
+          # 驗證 import 是否成功
+          python -c "from google.genai import Client; print('✅ Google GenAI import OK')"
+          python -c "import yfinance as yf; print('✅ yfinance import OK')"
 
       - name: Run Script
         env:
@@ -35,3 +65,14 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python main.py
+      
+      - name: Upload debug info if failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-logs
+          path: |
+            *.txt
+            *.log
+            last_news_hash.txt
+          retention-days: 7
