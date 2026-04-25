@@ -26,7 +26,7 @@ SECTOR_WATCHLIST = {
 }
 ALL_TICKERS = list({t for lst in SECTOR_WATCHLIST.values() for t in lst})
 
-# ===== 新聞來源 (穩定可用) =====
+# ===== 新聞來源 =====
 NEWS_SOURCES = {
     "ARK Invest": {"url": "https://ark-invest.com/feed/", "sector": "宏觀/策略"},
     "Lobsters": {"url": "https://lobste.rs/rss", "sector": "科技/AI"},
@@ -64,7 +64,7 @@ def get_all_news():
     return news_list
 
 def get_all_stock_prices():
-    """獲取所有關注股票的即時價格和基本面 (核心修復)"""
+    """獲取所有關注股票的即時價格和基本面"""
     stock_data = {}
     print("💰 正在獲取即時股價...")
     for ticker in ALL_TICKERS:
@@ -79,6 +79,7 @@ def get_all_stock_prices():
                 info = stock.info
                 market_cap = info.get('marketCap')
                 pe = info.get('trailingPE')
+                target_price = info.get('targetMeanPrice')  # 機構平均目標價
                 sector = next((s for s, lst in SECTOR_WATCHLIST.items() if ticker in lst), "其他")
                 
                 stock_data[ticker] = {
@@ -86,11 +87,12 @@ def get_all_stock_prices():
                     "day_change": day_change,
                     "market_cap": round(market_cap/1e9, 1) if market_cap else "N/A",
                     "pe": round(pe, 1) if pe else "N/A",
+                    "target_price": round(target_price, 2) if target_price else "N/A",
                     "sector": sector
                 }
         except Exception as e:
             print(f"⚠️ {ticker} 數據獲取失敗: {e}")
-        time.sleep(0.1)  # 避免限流
+        time.sleep(0.1)
     print(f"✅ 成功獲取 {len(stock_data)} 支股票即時數據")
     return stock_data
 
@@ -134,6 +136,8 @@ def send_telegram(text):
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     if not token or not chat_id:
         return
+    # 移除所有 * 號（粗體標記）
+    text = text.replace("*", "")
     if len(text) > 4000:
         text = text[:3900] + "\n...(訊息過長截斷)"
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -159,7 +163,7 @@ def main():
     all_news = get_all_news()
     print(f"✅ 共 {len(all_news)} 條新聞")
 
-    # 2. 獲取即時股價 (核心修復)
+    # 2. 獲取即時股價 (含目標價)
     stock_prices = get_all_stock_prices()
     
     # 3. 掃描動能股
@@ -180,59 +184,64 @@ def main():
     with open(hash_file, "w") as f:
         f.write(news_hash)
 
-    # 6. 構建價格摘要 (供 AI 參考，不准編造)
+    # 6. 構建價格摘要 (供 AI 參考)
     price_summary = "【即時市場數據】(來源: yfinance, 更新於 {})\n".format(current_time)
-    for ticker, data in list(stock_prices.items())[:50]:  # 取前50支做參考
-        price_summary += f"- {ticker}: ${data['price']} ({data['day_change']:+.1f}%) | {data['sector']}\n"
+    for ticker, data in list(stock_prices.items())[:50]:
+        target = f"目標價 ${data['target_price']}" if data['target_price'] != "N/A" else "無機構目標價"
+        price_summary += f"- {ticker}: ${data['price']} ({data['day_change']:+.1f}%) | {target} | {data['sector']}\n"
 
     # 7. 新聞摘要
     news_by_sector = {}
     for n in all_news[:50]:
         sec = n["sector"]
         news_by_sector.setdefault(sec, []).append(f"[{n['source']}] {n['title'][:100]}")
-    news_summary = "\n".join([f"**{sec}**\n"+"\n".join(lst[:4]) for sec,lst in news_by_sector.items()])
+    news_summary = "\n".join([f"{sec}\n"+"\n".join(lst[:4]) for sec,lst in news_by_sector.items()])
 
     # 8. 高能預警
     all_titles = " ".join([n["title"] for n in all_news])
     is_emergency = any(kw.lower() in all_titles.lower() for kw in HOT_KEYWORDS)
     alert_flag = "🚨 高能技術預警" if is_emergency else "🔍 五大賽道前瞻掃描"
 
-    # 9. Prompt (明確要求使用提供的即時價格)
+    # 9. Prompt (要求輸出即時價 + 預測價，禁用 * 號)
     prompt = f"""
 {alert_flag}
 
-**重要**: 以下【即時市場數據】中的所有價格都是從交易所直接獲取的**真實當前價格**（更新於 {current_time} 澳門時間）。請**必須**基於這些真實價格進行分析，**嚴禁**自己編造或猜測任何股票的價格。
+重要規則：
+1. 禁止使用任何 * 號（不要用粗體）
+2. 每支股票必須同時顯示：即時價格 + 你的目標價預測
+3. 所有價格數字必須清晰列出
 
-=== 即時市場數據 (真實價格) ===
+以下是真實的即時市場數據（更新於 {current_time}）：
+
 {price_summary}
 
-=== 新聞與機構報告 ===
+以下是最新新聞摘要：
+
 {news_summary}
 
-=== 技術面動能掃描 ===
-{momentum_stocks[:10] if momentum_stocks else "無明顯動能股"}
+以下是有動能的股票：
 
-=== 關鍵信號 ===
-{', '.join(signals) if signals else "無"}
+{[s['ticker'] for s in momentum_stocks] if momentum_stocks else "無"}
 
-=== 輸出要求 ===
-請挑選 **3-6 支** 最有可能爆發的股票，按以下格式輸出：
+檢測到的關鍵信號：{', '.join(signals) if signals else "無"}
+
+請挑選 3-6 支最有可能在未來 1-4 週內爆發的股票，按以下格式輸出（不要用 * 號）：
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎯 **股票代號** (參考即時價格: $XX.XX)
-📂 **所屬賽道**
+股票代號: XXX
+賽道: (科技/AI/能源/國防/醫療/金融)
+即時價格: $XX.XX
+預測目標價: $XX.XX (1-4週)
+上漲潛力: +XX%
 
-📌 **爆發邏輯鏈**
-(趨勢 → 原因 → 市場為何尚未反應)
+爆發邏輯鏈:
+(3-4 句話說明趨勢、原因、為何市場尚未反應)
 
-🎯 **預期爆發窗口**: (1-2週/1個月)
-⚠️ **驗證信號**: (2個觀察事件)
+預期爆發窗口: (1-2週/1個月)
+驗證信號: (2個可觀察事件)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-**規則**:
-- 價格必須引用上述【即時市場數據】中的真實數字
-- 不要推薦月漲幅已超 30% 的股票
-- 五大賽道盡量分散
+禁止推薦月漲幅已過30%的股票。五大賽道盡量分散。
 """
 
     # 10. 調用 Gemini
@@ -243,13 +252,13 @@ def main():
             if resp.text:
                 footer = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📎 **數據時間戳**
-├─ 股價數據: {current_time} (即時)
+📎 數據時間戳
+├─ 即時股價: {current_time}
 ├─ 新聞數據: {current_time}
 ├─ 分析模型: Gemini Flash
 └─ 報告時間: {current_time} (澳門時間)
 
-⚡ 免責聲明: 以上分析僅供參考
+⚡ 免責聲明: 以上分析僅供參考，預測價格為AI估算，不構成投資建議。
 """
                 send_telegram(resp.text + footer)
                 break
