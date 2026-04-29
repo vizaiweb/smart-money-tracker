@@ -1,0 +1,45 @@
+name: Intraday Signal Check (盘中)
+
+on:
+  schedule:
+    # 美股交易时段：澳门时间 21:30 - 次日 04:00 (冬令时)
+    # 以下时间仅供参考，你可以根据需求调整频率
+    - cron: '30 13 * * 1-5'   # 澳门时间 21:30 (开盘)
+    - cron: '0 14 * * 1-5'    # 澳门时间 22:00
+    - cron: '0 15 * * 1-5'    # 澳门时间 23:00
+    - cron: '0 16 * * 1-5'    # 澳门时间 00:00 (次日)
+    - cron: '0 17 * * 1-5'    # 澳门时间 01:00
+    - cron: '0 18 * * 1-5'    # 澳门时间 02:00
+    - cron: '30 19 * * 1-5'   # 澳门时间 03:30 (收盘前半小时)
+  workflow_dispatch:
+
+jobs:
+  check-signals:
+    timeout-minutes: 8        # 盘中检查要快，8分钟足够
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies (快速模式)
+        run: |
+          pip install yfinance google-genai
+
+      - name: Download latest technical data
+        uses: actions/download-artifact@v4
+        with:
+          name: technical-data
+          # 如果没有找到昨天的数据，就跳过（这种情况首次运行才会发生）
+
+      - name: Run Signal Check
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python intraday_signal.py      # 新脚本，只检查盘中快速信号，不重新计算所有指标
