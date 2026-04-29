@@ -9,6 +9,16 @@ import urllib.parse
 import yfinance as yf
 from google.genai import Client
 
+# ===== 运行模式设置 =====
+# RUN_MODE = "full" (完整模式，重新计算所有数据，用于每日总结)
+# RUN_MODE = "quick" (快速模式，使用缓存的技术指标，用于盘中检查)
+RUN_MODE = os.getenv("RUN_MODE", "full")
+
+if RUN_MODE == "quick":
+    print("⚡ 运行模式: 快速模式 (使用缓存数据)")
+else:
+    print("🔧 运行模式: 完整模式 (重新计算所有数据)")
+
 # ===== 設定 =====
 HOT_KEYWORDS = ['Ising', 'Quantum', 'Superconductor', 'Photonics', 'CPO', 'Nuclear', 'Fusion', 'LLM Architecture']
 MOMENTUM_THRESHOLD = 2.5
@@ -79,7 +89,7 @@ def get_all_stock_prices():
                 info = stock.info
                 market_cap = info.get('marketCap')
                 pe = info.get('trailingPE')
-                target_price = info.get('targetMeanPrice')  # 機構平均目標價
+                target_price = info.get('targetMeanPrice')
                 sector = next((s for s, lst in SECTOR_WATCHLIST.items() if ticker in lst), "其他")
                 
                 stock_data[ticker] = {
@@ -112,6 +122,34 @@ def scan_momentum(stock_data):
     momentum.sort(key=lambda x: abs(x['day_change']), reverse=True)
     return momentum[:15]
 
+def scan_momentum_quick(stock_prices):
+    """快速模式下的动能扫描 - 只获取必要数据"""
+    momentum = []
+    print("📈 快速扫描动能股...")
+    for ticker, data in stock_prices.items():
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period="2d")
+            if len(hist) >= 2:
+                current = hist['Close'].iloc[-1]
+                prev = hist['Close'].iloc[-2]
+                day_change = ((current - prev) / prev) * 100
+                
+                if 0.5 < abs(day_change) < 5.0:
+                    momentum.append({
+                        "ticker": ticker,
+                        "sector": data.get("sector", "其他"),
+                        "price": round(current, 2),
+                        "day_change": round(day_change, 2),
+                        "signal": "蓄力上漲" if day_change > 0 else "底部放量"
+                    })
+        except:
+            pass
+        time.sleep(0.05)
+    momentum.sort(key=lambda x: abs(x['day_change']), reverse=True)
+    print(f"✅ 发现 {len(momentum)} 支动能股")
+    return momentum[:15]
+
 def extract_signals(news_items):
     keywords = {
         "CPU需求": ["CPU","x86","ARM","算力"],
@@ -135,6 +173,7 @@ def send_telegram(text):
     token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     if not token or not chat_id:
+        print("⚠️ 未配置 Telegram 凭证，跳过发送")
         return
     # 移除所有 * 號（粗體標記）
     text = text.replace("*", "")
@@ -144,7 +183,7 @@ def send_telegram(text):
     data = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode()
     try:
         urllib.request.urlopen(url, data=data, timeout=15)
-        print("📲 已發送")
+        print("📲 已發送 Telegram")
     except Exception as e:
         print(f"❌ 發送失敗: {e}")
 
@@ -163,11 +202,37 @@ def main():
     all_news = get_all_news()
     print(f"✅ 共 {len(all_news)} 條新聞")
 
-    # 2. 獲取即時股價 (含目標價)
-    stock_prices = get_all_stock_prices()
+    # 2. 獲取即時股價 (根据模式选择)
+    if RUN_MODE == "quick":
+        # 快速模式：加载缓存的技术指标
+        import json
+        try:
+            with open("technical_data_quick.json", "r") as f:
+                cached_tech = json.load(f)
+            print(f"✅ 加载缓存技术指标，共 {len(cached_tech)} 只股票")
+            
+            # 转换为 stock_prices 格式
+            stock_prices = {}
+            for ticker, data in cached_tech.items():
+                stock_prices[ticker] = {
+                    "price": data["price"],
+                    "day_change": 0,
+                    "market_cap": "N/A",
+                    "pe": "N/A",
+                    "target_price": "N/A",
+                    "sector": data.get("sector", "其他")
+                }
+        except Exception as e:
+            print(f"⚠️ 加载缓存失败，回退到完整模式: {e}")
+            stock_prices = get_all_stock_prices()
+    else:
+        stock_prices = get_all_stock_prices()
     
-    # 3. 掃描動能股
-    momentum_stocks = scan_momentum(stock_prices)
+    # 3. 掃描動能股 (根据模式选择)
+    if RUN_MODE == "quick":
+        momentum_stocks = scan_momentum_quick(stock_prices)
+    else:
+        momentum_stocks = scan_momentum(stock_prices)
     print(f"📈 發現 {len(momentum_stocks)} 支動能股")
 
     # 4. 提取信號
@@ -184,11 +249,11 @@ def main():
     with open(hash_file, "w") as f:
         f.write(news_hash)
 
-    # 6. 構建價格摘要 (供 AI 參考)
+    # 6. 構建價格摘要
     price_summary = "【即時市場數據】(來源: yfinance, 更新於 {})\n".format(current_time)
     for ticker, data in list(stock_prices.items())[:50]:
-        target = f"目標價 ${data['target_price']}" if data['target_price'] != "N/A" else "無機構目標價"
-        price_summary += f"- {ticker}: ${data['price']} ({data['day_change']:+.1f}%) | {target} | {data['sector']}\n"
+        target = f"目標價 ${data['target_price']}" if data.get('target_price', 'N/A') != "N/A" else "無機構目標價"
+        price_summary += f"- {ticker}: ${data['price']} ({data.get('day_change', 0):+.1f}%) | {target} | {data['sector']}\n"
 
     # 7. 新聞摘要
     news_by_sector = {}
@@ -202,14 +267,14 @@ def main():
     is_emergency = any(kw.lower() in all_titles.lower() for kw in HOT_KEYWORDS)
     alert_flag = "🚨 高能技術預警" if is_emergency else "🔍 五大賽道前瞻掃描"
 
-    # 9. Prompt (要求輸出即時價 + 預測價，禁用 * 號)
+    # 9. Prompt (修改为验证型，不做价格预测)
     prompt = f"""
 {alert_flag}
 
 重要規則：
 1. 禁止使用任何 * 號（不要用粗體）
-2. 每支股票必須同時顯示：即時價格 + 你的目標價預測
-3. 所有價格數字必須清晰列出
+2. 禁止输出任何目标价预测或上涨潜力百分比
+3. 你的角色是风险分析师和信号验证器
 
 以下是真實的即時市場數據（更新於 {current_time}）：
 
@@ -225,31 +290,46 @@ def main():
 
 檢測到的關鍵信號：{', '.join(signals) if signals else "無"}
 
-請挑選 3-6 支最有可能在未來 1-4 週內爆發的股票，按以下格式輸出（不要用 * 號）：
+請輸出以下格式的分析報告（不要用 * 號）：
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【市場環境評估】
+- 市場情緒: (偏多/中性/偏空 + 簡要理由)
+- 今日風險等級: (低/中/高)
+
+【值得關注的股票】(最多5隻，只推薦信號明確的)
+
 股票代號: XXX
 賽道: (科技/AI/能源/國防/醫療/金融)
 即時價格: $XX.XX
-預測目標價: $XX.XX (1-4週)
-上漲潛力: +XX%
+技術信號驗證:
+- 是否站上5日均線: 是/否
+- 成交量是否放大: 是/否 (倍數)
+- RSI是否健康: 是/否 (數值)
 
-爆發邏輯鏈:
-(3-4 句話說明趨勢、原因、為何市場尚未反應)
-
+爆發邏輯鏈: (2-3句話說明驅動因素)
 預期爆發窗口: (1-2週/1個月)
 驗證信號: (2個可觀察事件)
+
+【操作建議】
+- 建議列入觀察: 是/否
+- 建議倉位: 不超過總資金 X%
+- 止損參考: 跌破5日均線或-2%
+
+【需要警惕的風險】
+(列出2-3個風險信號)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 禁止推薦月漲幅已過30%的股票。五大賽道盡量分散。
 """
 
-    # 10. 調用 Gemini
+    # 10. 调用 Gemini
     for attempt in range(3):
         try:
             print(f"🤖 AI 分析中 ({attempt+1}/3)...")
             resp = client.models.generate_content(model='gemini-flash-latest', contents=prompt)
             if resp.text:
+                # 添加免责声明和短线交易纪律
                 footer = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📎 數據時間戳
@@ -258,7 +338,14 @@ def main():
 ├─ 分析模型: Gemini Flash
 └─ 報告時間: {current_time} (澳門時間)
 
-⚡ 免責聲明: 以上分析僅供參考，預測價格為AI估算，不構成投資建議。
+⚡ 免責聲明: 以上分析僅供參考，不構成投資建議。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 短线交易纪律提醒
+├─ 5日均线是生命线，跌破即止损
+├─ 连续止损2次，当日停止交易
+├─ 单只股票仓位 ≤ 10%
+└─ 不满足3项技术信号 → 不开仓
 """
                 send_telegram(resp.text + footer)
                 break
