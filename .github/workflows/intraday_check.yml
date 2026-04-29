@@ -11,7 +11,7 @@ on:
     - cron: '0 17 * * 1-5'    # 澳门时间 01:00
     - cron: '0 18 * * 1-5'    # 澳门时间 02:00
     - cron: '30 19 * * 1-5'   # 澳门时间 03:30 (收盘前半小时)
-  workflow_dispatch:
+  workflow_dispatch:          # 保留手动触发
 
 jobs:
   check-signals:
@@ -27,19 +27,51 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies (快速模式)
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
         run: |
+          pip install --upgrade pip
           pip install yfinance google-genai
 
       - name: Download latest technical data
         uses: actions/download-artifact@v4
         with:
           name: technical-data
-          # 如果没有找到昨天的数据，就跳过（这种情况首次运行才会发生）
+          path: .   # 关键：明确指定下载到当前目录
+
+      - name: List downloaded files (for debugging)
+        run: |
+          echo "当前目录文件列表:"
+          ls -la
+          echo ""
+          echo "检查 technical_data_quick.json 是否存在:"
+          if [ -f technical_data_quick.json ]; then
+            echo "✅ technical_data_quick.json 存在"
+            head -c 500 technical_data_quick.json
+          else
+            echo "⚠️ technical_data_quick.json 不存在"
+          fi
 
       - name: Run Signal Check
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python intraday_signal.py      # 新脚本，只检查盘中快速信号，不重新计算所有指标
+        run: python intraday_signal.py
+
+      - name: Upload debug logs if failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-logs-intraday
+          path: |
+            *.log
+            *.txt
+          retention-days: 3
