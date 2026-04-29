@@ -40,5 +40,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: technical-data
-          path: technical_data.json          # 存储技术指标供其他工作流使用
+          path: technical_data_quick.json          # 存储技术指标供其他工作流使用
           retention-days: 1
