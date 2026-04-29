@@ -1,29 +1,13 @@
-name: Daily Investment Summary
+name: Daily Data Update (收盘后)
 
 on:
   schedule:
-    # 以下時間皆為 UTC，自動換算為澳門時間 (UTC+8)
-    # 澳門 09:00 (早報：科研論文 arXiv)
-    - cron: '0 1 * * 1-5'
-    
-    # 澳門 14:00 (午報：亞太熱點)
-    - cron: '0 6 * * 1-5'
-    
-    # 澳門 20:00 (美股盤前：熱點預警)
-    - cron: '0 12 * * 1-5'
-    
-    # 澳門 22:00 (美股觀察：開盤前夕)
-    - cron: '0 14 * * 1-5'
-    
-    # 澳門 06:00 (收盤戰報：盤後總結 - 隔日早上)
-    - cron: '0 22 * * 1-5'
-    
-  # 保留手動觸發功能
-  workflow_dispatch:
+    - cron: '30 21 * * 1-5'   # 澳门时间 05:30 (美股收盘后约半小时)
+  workflow_dispatch:          # 保留手动触发
 
 jobs:
-  build:
-    timeout-minutes: 10
+  update-data:
+    timeout-minutes: 15       # 数据下载可能较慢，放宽到15分钟
     runs-on: ubuntu-latest
     
     steps:
@@ -45,35 +29,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          
-          # 如果有 requirements.txt 就用它安裝
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            # 否則直接安裝套件
-            pip install yfinance google-genai
-          fi
-          
-          # 驗證 import 是否成功
-          python -c "from google.genai import Client; print('✅ Google GenAI import OK')"
-          python -c "import yfinance as yf; print('✅ yfinance import OK')"
+          pip install yfinance google-genai pandas
 
-      - name: Run Script
+      - name: Run Data Update Script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python main.py
+        run: python update_technical_data.py   # 新脚本，只下载和存储技术指标
       
-      - name: Upload debug info if failed
-        if: failure()
+      - name: Upload technical data
         uses: actions/upload-artifact@v4
         with:
-          name: debug-logs
-          path: |
-            *.txt
-            *.log
-            last_news_hash.txt
-          retention-days: 7
-          
+          name: technical-data
+          path: technical_data.json          # 存储技术指标供其他工作流使用
+          retention-days: 1
