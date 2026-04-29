@@ -227,12 +227,12 @@ def main():
     if high_score_stocks:
         print(f"   {', '.join(high_score_stocks[:20])}")
     
-    # 保存到JSON文件
+        # 保存到JSON文件（使用自定义编码器处理特殊类型）
     output_file = "technical_data.json"
     with open(output_file, "w") as f:
-        json.dump(technical_results, f, indent=2, ensure_ascii=False)
+        json.dump(technical_results, f, indent=2, ensure_ascii=False, default=str)
     
-    # 同时保存一个精简版（用于快速读取）
+    # 保存精简版时也使用 default=str
     quick_lookup = {
         ticker: {
             "price": data["price"],
@@ -247,7 +247,7 @@ def main():
     }
     
     with open("technical_data_quick.json", "w") as f:
-        json.dump(quick_lookup, f, indent=2)
+        json.dump(quick_lookup, f, indent=2, ensure_ascii=False, default=str)
     
     # 输出统计信息
     print("\n" + "=" * 50)
