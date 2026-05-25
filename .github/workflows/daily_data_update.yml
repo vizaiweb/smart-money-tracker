@@ -1,15 +1,18 @@
-name: Daily Data Update (收盘后)
+name: Daily Investment Summary
 
 on:
   schedule:
-    - cron: '30 21 * * 1-5'   # 澳门时间 05:30 (美股收盘后约半小时)
-  workflow_dispatch:          # 保留手动触发
+    - cron: '0 0 * * *'    # 每天早上 UTC 00:00 (台灣時間 08:00)
+    - cron: '0 6 * * *'    # 每天下午 UTC 06:00 (台灣時間 14:00)
+  workflow_dispatch:      # 保留手動觸發功能
 
 jobs:
-  update-data:
-    timeout-minutes: 15       # 数据下载可能较慢，放宽到15分钟
+  build:
     runs-on: ubuntu-latest
-    
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,26 +22,14 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Cache pip packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install dependencies
         run: |
-          pip install yfinance google-genai pandas
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Run Data Update Script
+      - name: Run Script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python update_technical_data.py   # 新脚本，只下载和存储技术指标
-      
-      - name: Upload technical data
-        uses: actions/upload-artifact@v4
-        with:
-          name: technical-data
-          path: technical_data_quick.json          # 存储技术指标供其他工作流使用
-          retention-days: 1
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
