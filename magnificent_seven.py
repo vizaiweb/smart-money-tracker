@@ -8,7 +8,6 @@ import sys
 import urllib.parse
 from datetime import datetime, timezone, timedelta
 import yfinance as yf
-from google.genai import Client
 
 # ===== AI 七雄股票列表 (代號, 中文名, 英文名) =====
 MAGNIFICENT_SEVEN = [
@@ -37,20 +36,20 @@ def get_stock_data():
                 prev_close = round(hist['Close'].iloc[-2], 2) if len(hist) >= 2 else current_price
                 day_change = round(((current_price - prev_close) / prev_close) * 100, 2)
                 
-                # 獲取盤前/盤後價格（如果有）
-                try:
-                    fast = s.fast_info
-                    pre_price = round(fast.get('last_price', current_price), 2)
-                except:
-                    pre_price = current_price
-                
                 results.append({
                     "ticker": ticker,
                     "ch_name": stock["ch_name"],
                     "en_name": stock["en_name"],
                     "price": current_price,
-                    "pre_price": pre_price,
                     "day_change": day_change
+                })
+            else:
+                results.append({
+                    "ticker": stock["ticker"],
+                    "ch_name": stock["ch_name"],
+                    "en_name": stock["en_name"],
+                    "price": "N/A",
+                    "day_change": "N/A"
                 })
         except Exception as e:
             print(f"⚠️ {stock['ticker']} 獲取失敗: {e}")
@@ -59,13 +58,12 @@ def get_stock_data():
                 "ch_name": stock["ch_name"],
                 "en_name": stock["en_name"],
                 "price": "N/A",
-                "pre_price": "N/A",
                 "day_change": "N/A"
             })
     
     return results
 
-def generate_report(stock_data, current_time, session):
+def generate_report(stock_data, current_time):
     """生成報告內容"""
     tz = timezone(timedelta(hours=8))
     now = datetime.now(tz)
@@ -135,11 +133,6 @@ def send_telegram(text):
         print(f"❌ 發送失敗: {e}")
 
 def main():
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        print("❌ 缺少 GEMINI_API_KEY")
-        sys.exit(1)
-    
     tz = timezone(timedelta(hours=8))
     current_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
     
@@ -152,7 +145,7 @@ def main():
     stock_data = get_stock_data()
     
     # 生成報告
-    report = generate_report(stock_data, current_time, None)
+    report = generate_report(stock_data, current_time)
     
     # 發送
     print("\n" + report)
