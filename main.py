@@ -249,78 +249,92 @@ def main():
     with open(hash_file, "w") as f:
         f.write(news_hash)
 
-    # 6. 構建價格摘要
-    price_summary = "【即時市場數據】(來源: yfinance, 更新於 {})\n".format(current_time)
-    for ticker, data in list(stock_prices.items())[:50]:
-        target = f"目標價 ${data['target_price']}" if data.get('target_price', 'N/A') != "N/A" else "無機構目標價"
-        price_summary += f"- {ticker}: ${data['price']} ({data.get('day_change', 0):+.1f}%) | {target} | {data['sector']}\n"
+    # ==================== 核心修改：只保留 AI 相關內容 ====================
+    
+    # 6. 構建價格摘要 (只保留科技/AI赛道)
+    price_summary = "【AI 相關股即時市場數據】(來源: yfinance, 更新於 {})\n".format(current_time)
+    ai_stocks_count = 0
+    for ticker, data in list(stock_prices.items()):
+        # 只保留科技/AI赛道的股票
+        if data.get('sector') == "🚀 科技/AI":
+            target = f"目標價 ${data['target_price']}" if data.get('target_price', 'N/A') != "N/A" else "無機構目標價"
+            price_summary += f"- {ticker}: ${data['price']} ({data.get('day_change', 0):+.1f}%) | {target}\n"
+            ai_stocks_count += 1
+    price_summary += f"\n**共篩選出 {ai_stocks_count} 支 AI 重點股**\n"
 
-    # 7. 新聞摘要
-    news_by_sector = {}
+    # 7. 新聞摘要 (只保留科技/AI相关新闻)
+    news_summary = "【AI 相關最新新聞】\n"
+    ai_news_count = 0
     for n in all_news[:50]:
-        sec = n["sector"]
-        news_by_sector.setdefault(sec, []).append(f"[{n['source']}] {n['title'][:100]}")
-    news_summary = "\n".join([f"{sec}\n"+"\n".join(lst[:4]) for sec,lst in news_by_sector.items()])
+        # 检查新闻的 sector 是否为科技/AI，或者标题是否包含常见AI关键词
+        if n["sector"] == "科技/AI" or any(kw in n["title"].lower() for kw in ['ai', 'gpu', 'nvidia', 'amd', 'intel', 'llm', 'artificial', 'intelligence']):
+            news_summary += f"- [{n['source']}] {n['title'][:120]}\n"
+            ai_news_count += 1
+    news_summary += f"\n**共篩選出 {ai_news_count} 條 AI 相關新聞**\n"
 
-    # 8. 高能預警
-    all_titles = " ".join([n["title"] for n in all_news])
-    is_emergency = any(kw.lower() in all_titles.lower() for kw in HOT_KEYWORDS)
-    alert_flag = "🚨 高能技術預警" if is_emergency else "🔍 五大賽道前瞻掃描"
+    # 8. 提取 AI 相關的動能股信號
+    ai_momentum_signals = []
+    for s in momentum_stocks:
+        if s['ticker'] in [t for t, d in stock_prices.items() if d.get('sector') == "🚀 科技/AI"]:
+            ai_momentum_signals.append(f"{s['ticker']}({s['signal']})")
+    
+    ai_signals = ', '.join([s for s in signals if s in ['CPU需求', '算力不足', 'AI爆發']]) if signals else "無"
 
-    # 9. Prompt (修改为验证型，不做价格预测)
+    # 9. 新的 Prompt：聚焦 AI 股涨跌原因分析与次日走势预告
     prompt = f"""
-{alert_flag}
+你的身份：一位專注於美股科技板塊的資深分析師。
 
-重要規則：
-1. 禁止使用任何 * 號（不要用粗體）
-2. 禁止输出任何目标价预测或上涨潜力百分比
-3. 你的角色是风险分析师和信号验证器
+任務：
+1. **复盘**：分析昨日（或最近一個交易日）美股市場中，**AI 相關重點股票** 出現顯著上漲或下跌的 **具體原因**。
+2. **预告**：基於當前數據和趨勢，對 **下一個交易日** 的 AI 板塊走勢給出明確預告。
 
-以下是真實的即時市場數據（更新於 {current_time}）：
+**重要規則：**
+- 嚴格禁止使用任何 * 號（不要用粗體）。
+- 分析必須 **緊扣下面提供的真實數據**，不要憑空猜測。
+- 原因分析要具體（例如：受某公司財報、行業政策、技術突破、或大盤情緒帶動）。
+- 走勢預告要清晰（看多 / 看空 / 震蕩），並給出最核心的一個理由。
+
+以下是系統篩選過的 **AI 重點股即時數據**（僅包含「科技/AI」賽道）：
 
 {price_summary}
 
-以下是最新新聞摘要：
+以下是最新 **AI 相關新聞摘要**：
 
 {news_summary}
 
-以下是有動能的股票：
+以下是系統掃描到、與 AI 股相關的 **動能信號**：
 
-{[s['ticker'] for s in momentum_stocks] if momentum_stocks else "無"}
+{', '.join(ai_momentum_signals) if ai_momentum_signals else "無特定動能信號"}
 
-檢測到的關鍵信號：{', '.join(signals) if signals else "無"}
+檢測到的 **關鍵信號**（與 AI 相關）：{ai_signals}
 
-請輸出以下格式的分析報告（不要用 * 號）：
+**請嚴格按照以下格式輸出分析報告（不要用 * 號）：**
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【市場環境評估】
-- 市場情緒: (偏多/中性/偏空 + 簡要理由)
-- 今日風險等級: (低/中/高)
+【昨日 AI 重點股漲跌復盤】
 
-【值得關注的股票】(最多5隻，只推薦信號明確的)
+1. **股票代號: XXX**
+   - 昨日表現: (上漲/下跌 X.X%)
+   - 核心原因: (1-2句話，具體說明)
+   - 驅動邏輯鏈條: (簡要說明事件如何影響股價)
 
-股票代號: XXX
-賽道: (科技/AI/能源/國防/醫療/金融)
-即時價格: $XX.XX
-技術信號驗證:
-- 是否站上5日均線: 是/否
-- 成交量是否放大: 是/否 (倍數)
-- RSI是否健康: 是/否 (數值)
+2. **股票代號: YYY**
+   - 昨日表現: ...
+   ... (請分析 2-4 隻最具代表性的 AI 股，如 NVDA, AMD, SMCI, AVGO, PLTR 等)
 
-爆發邏輯鏈: (2-3句話說明驅動因素)
-預期爆發窗口: (1-2週/1個月)
-驗證信號: (2個可觀察事件)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【下一交易日走勢預告】
 
-【操作建議】
-- 建議列入觀察: 是/否
-- 建議倉位: 不超過總資金 X%
-- 止損參考: 跌破5日均線或-2%
+- **AI 板塊整體判斷**: (看多 / 看空 / 震蕩)
+- **核心關注點**: (下個交易日需要關注的關鍵事件或數據)
+- **重點個股預判**:
+  - XXX: 預計 (偏多/偏空)，理由 (一句話)
+  - YYY: 預計 (偏多/偏空)，理由 (一句話)
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【需要警惕的風險】
-(列出2-3個風險信號)
+(列出 1-2 個可能影響 AI 板塊的下行風險)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-禁止推薦月漲幅已過30%的股票。五大賽道盡量分散。
 """
 
     # 10. 调用 Gemini
@@ -329,23 +343,13 @@ def main():
             print(f"🤖 AI 分析中 ({attempt+1}/3)...")
             resp = client.models.generate_content(model='gemini-flash-latest', contents=prompt)
             if resp.text:
-                # 添加免责声明和短线交易纪律
+                # 添加精简的免责声明和报告信息
                 footer = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📎 數據時間戳
-├─ 即時股價: {current_time}
-├─ 新聞數據: {current_time}
-├─ 分析模型: Gemini Flash
-└─ 報告時間: {current_time} (澳門時間)
-
+📎 報告時間: {current_time} (澳門時間)
+📌 數據來源: Fed, CNBC, Yahoo Finance (RSS) & yfinance
 ⚡ 免責聲明: 以上分析僅供參考，不構成投資建議。
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 短线交易纪律提醒
-├─ 5日均线是生命线，跌破即止损
-├─ 连续止损2次，当日停止交易
-├─ 单只股票仓位 ≤ 10%
-└─ 不满足3项技术信号 → 不开仓
 """
                 send_telegram(resp.text + footer)
                 break
