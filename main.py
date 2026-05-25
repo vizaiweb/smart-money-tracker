@@ -23,6 +23,35 @@ else:
 HOT_KEYWORDS = ['Ising', 'Quantum', 'Superconductor', 'Photonics', 'CPO', 'Nuclear', 'Fusion', 'LLM Architecture']
 MOMENTUM_THRESHOLD = 2.5
 
+# ===== 股票代號與全稱對照表（AI 相關重點股）=====
+STOCK_FULL_NAMES = {
+    "NVDA": {"ch": "輝達", "en": "NVIDIA Corporation"},
+    "AMD": {"ch": "超微半導體", "en": "Advanced Micro Devices Inc."},
+    "INTC": {"ch": "英特爾", "en": "Intel Corporation"},
+    "ARM": {"ch": "安謀", "en": "Arm Holdings plc"},
+    "MU": {"ch": "美光科技", "en": "Micron Technology Inc."},
+    "SMCI": {"ch": "美超微電腦", "en": "Super Micro Computer Inc."},
+    "AAPL": {"ch": "蘋果", "en": "Apple Inc."},
+    "MSFT": {"ch": "微軟", "en": "Microsoft Corporation"},
+    "META": {"ch": "臉書母公司 Meta", "en": "Meta Platforms Inc."},
+    "GOOGL": {"ch": "谷歌母公司 Alphabet", "en": "Alphabet Inc."},
+    "AMZN": {"ch": "亞馬遜", "en": "Amazon.com Inc."},
+    "AVGO": {"ch": "博通", "en": "Broadcom Inc."},
+    "QCOM": {"ch": "高通", "en": "Qualcomm Inc."},
+    "TXN": {"ch": "德州儀器", "en": "Texas Instruments Inc."},
+    "AMAT": {"ch": "應用材料", "en": "Applied Materials Inc."},
+    "LRCX": {"ch": "科林研發", "en": "Lam Research Corporation"},
+    "KLAC": {"ch": "科磊", "en": "KLA Corporation"},
+    "ASML": {"ch": "艾司摩爾", "en": "ASML Holding NV"},
+    "PLTR": {"ch": "帕蘭泰爾", "en": "Palantir Technologies Inc."},
+    "CRM": {"ch": "賽富時", "en": "Salesforce Inc."},
+    "ADBE": {"ch": "奧多比", "en": "Adobe Inc."},
+    "NOW": {"ch": "服務現在", "en": "ServiceNow Inc."},
+    "SNOW": {"ch": "雪花", "en": "Snowflake Inc."},
+    "PANW": {"ch": "帕洛阿爾托網絡", "en": "Palo Alto Networks Inc."},
+    "CRWD": {"ch": " crowdstrike", "en": "CrowdStrike Holdings Inc."}
+}
+
 # ===== 五大賽道股票池 =====
 SECTOR_WATCHLIST = {
     "🚀 科技/AI": [
@@ -187,6 +216,12 @@ def send_telegram(text):
     except Exception as e:
         print(f"❌ 發送失敗: {e}")
 
+def get_stock_full_name(ticker):
+    """根據代號返回中文及英文全稱"""
+    if ticker in STOCK_FULL_NAMES:
+        return f"{STOCK_FULL_NAMES[ticker]['ch']}, {STOCK_FULL_NAMES[ticker]['en']}"
+    return "待查詢"
+
 def main():
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -249,7 +284,7 @@ def main():
     with open(hash_file, "w") as f:
         f.write(news_hash)
 
-    # ==================== 核心修改：只保留 AI 相關內容 ====================
+    # ==================== 核心：只保留 AI 相關內容 ====================
     
     # 6. 構建價格摘要 (只保留科技/AI赛道)
     price_summary = "【AI 相關股即時市場數據】(來源: yfinance, 更新於 {})\n".format(current_time)
@@ -258,7 +293,8 @@ def main():
         # 只保留科技/AI赛道的股票
         if data.get('sector') == "🚀 科技/AI":
             target = f"目標價 ${data['target_price']}" if data.get('target_price', 'N/A') != "N/A" else "無機構目標價"
-            price_summary += f"- {ticker}: ${data['price']} ({data.get('day_change', 0):+.1f}%) | {target}\n"
+            full_name = get_stock_full_name(ticker)
+            price_summary += f"- {ticker} ({full_name}): ${data['price']} ({data.get('day_change', 0):+.1f}%) | {target}\n"
             ai_stocks_count += 1
     price_summary += f"\n**共篩選出 {ai_stocks_count} 支 AI 重點股**\n"
 
@@ -276,11 +312,12 @@ def main():
     ai_momentum_signals = []
     for s in momentum_stocks:
         if s['ticker'] in [t for t, d in stock_prices.items() if d.get('sector') == "🚀 科技/AI"]:
-            ai_momentum_signals.append(f"{s['ticker']}({s['signal']})")
+            full_name = get_stock_full_name(s['ticker'])
+            ai_momentum_signals.append(f"{s['ticker']} ({full_name}) - {s['signal']}")
     
     ai_signals = ', '.join([s for s in signals if s in ['CPU需求', '算力不足', 'AI爆發']]) if signals else "無"
 
-    # 9. 新的 Prompt：聚焦 AI 股涨跌原因分析与次日走势预告
+    # 9. Prompt：聚焦 AI 股涨跌原因分析与次日走势预告（含公司全稱）
     prompt = f"""
 你的身份：一位專注於美股科技板塊的資深分析師。
 
@@ -293,6 +330,7 @@ def main():
 - 分析必須 **緊扣下面提供的真實數據**，不要憑空猜測。
 - 原因分析要具體（例如：受某公司財報、行業政策、技術突破、或大盤情緒帶動）。
 - 走勢預告要清晰（看多 / 看空 / 震蕩），並給出最核心的一個理由。
+- **輸出股票代號時，必須同時附上中文全稱和英文全稱，格式為：NVDA (輝達, NVIDIA Corporation)**
 
 以下是系統篩選過的 **AI 重點股即時數據**（僅包含「科技/AI」賽道）：
 
@@ -313,14 +351,14 @@ def main():
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【昨日 AI 重點股漲跌復盤】
 
-1. **股票代號: XXX**
+1. **股票代號: NVDA (輝達, NVIDIA Corporation)**
    - 昨日表現: (上漲/下跌 X.X%)
    - 核心原因: (1-2句話，具體說明)
    - 驅動邏輯鏈條: (簡要說明事件如何影響股價)
 
-2. **股票代號: YYY**
+2. **股票代號: AMD (超微半導體, Advanced Micro Devices Inc.)**
    - 昨日表現: ...
-   ... (請分析 2-4 隻最具代表性的 AI 股，如 NVDA, AMD, SMCI, AVGO, PLTR 等)
+   ... (請分析 2-4 隻最具代表性的 AI 股)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【下一交易日走勢預告】
@@ -328,8 +366,8 @@ def main():
 - **AI 板塊整體判斷**: (看多 / 看空 / 震蕩)
 - **核心關注點**: (下個交易日需要關注的關鍵事件或數據)
 - **重點個股預判**:
-  - XXX: 預計 (偏多/偏空)，理由 (一句話)
-  - YYY: 預計 (偏多/偏空)，理由 (一句話)
+  - NVDA (輝達, NVIDIA Corporation): 預計 (偏多/偏空)，理由 (一句話)
+  - MSFT (微軟, Microsoft Corporation): 預計 (偏多/偏空)，理由 (一句話)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【需要警惕的風險】
