@@ -2,34 +2,47 @@ name: Daily Investment Summary
 
 on:
   schedule:
-    - cron: '0 0 * * *'    # 每天早上 UTC 00:00 (台灣時間 08:00)
-    - cron: '0 6 * * *'    # 每天下午 UTC 06:00 (台灣時間 14:00)
-  workflow_dispatch:      # 保留手動觸發功能
+    # 主報告：早上 8:00 和 下午 14:00
+    - cron: '0 0 * * *'    # UTC 00:00 → 台灣 08:00
+    - cron: '0 6 * * *'    # UTC 06:00 → 台灣 14:00
+    
+    # AI 七雄追蹤：早上 7:55 和 下午 13:55
+    - cron: '55 23 * * *'   # UTC 23:55 → 台灣 07:55 (前一天 UTC)
+    - cron: '55 5 * * *'    # UTC 05:55 → 台灣 13:55
+  workflow_dispatch:
 
 jobs:
-  build:
+  # 主報告任務
+  main-report:
     runs-on: ubuntu-latest
-
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-      
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      - name: Run Script
+          pip install yfinance google-genai
+      - name: Run Main Report
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python main.py
+
+  # AI 七雄追蹤任務
+  magnificent-seven:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          pip install yfinance
+      - name: Run Magnificent Seven Tracker
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python magnificent_seven.py
